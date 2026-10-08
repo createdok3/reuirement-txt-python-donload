@@ -3,11 +3,10 @@ on:
   workflow_dispatch:
     inputs:
       packages_list:
-        description: 'Paste your list of packages (one per line, just like requirements.txt)'
+        description: 'Paste your list of packages (spaces or newlines are both fine)'
         required: true
         default: |
-          fastapi==0.111.0
-          uvicorn==0.30.0
+          fastapi==0.111.0 uvicorn==0.30.0
       python_version:
         description: 'Python version (e.g., 3.10, 3.11)'
         required: true
@@ -31,25 +30,23 @@ jobs:
 
       - name: Generate requirements.txt
         run: |
-          # Takes the multiline input from the UI and writes it to a file
-          cat << 'EOF' > requirements.txt
-          ${{ inputs.packages_list }}
-          EOF
+          # Takes the input and explicitly converts any spaces into newlines 
+          # so pip reads it correctly as a vertical list.
+          echo "${{ inputs.packages_list }}" | tr ' ' '\n' | grep -v '^$' > requirements.txt
           
           # Display the file contents in the logs for verification
-          echo "Packages to download:"
+          echo "Packages to download (formatted):"
           cat requirements.txt
 
       - name: Download Target Packages
         run: |
           python -m pip install --upgrade pip
-          # Use -r requirements.txt to download the entire list
+          # Use -r requirements.txt to download the entire list safely
           pip download -r requirements.txt -d payload/offline_packages --platform ${{ inputs.os_type }} --only-binary=:all:
 
       - name: Upload Dynamic Offline Bundle
         uses: actions/upload-artifact@v4
         with:
-          # Renamed artifact to be generic since it contains multiple packages
           name: offline-bundle-${{ inputs.os_type }}-${{ github.run_id }}
           path: payload/
           retention-days: 1
