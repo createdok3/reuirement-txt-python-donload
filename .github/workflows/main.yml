@@ -1,0 +1,55 @@
+name: Universal Offline Package Fetcher
+on:
+  workflow_dispatch:
+    inputs:
+      packages_list:
+        description: 'Paste your list of packages (one per line, just like requirements.txt)'
+        required: true
+        default: |
+          fastapi==0.111.0
+          uvicorn==0.30.0
+      python_version:
+        description: 'Python version (e.g., 3.10, 3.11)'
+        required: true
+        default: '3.10'
+      os_type:
+        description: 'OS Platform Tag (e.g., win_amd64, manylinux2014_x86_64)'
+        required: true
+        default: 'win_amd64'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Specific Python Version
+        uses: actions/setup-python@v5
+        with:
+          python-version: '${{ inputs.python_version }}'
+
+      - name: Create Payload Directory
+        run: mkdir -p payload/offline_packages
+
+      - name: Generate requirements.txt
+        run: |
+          # Takes the multiline input from the UI and writes it to a file
+          cat << 'EOF' > requirements.txt
+          ${{ inputs.packages_list }}
+          EOF
+          
+          # Display the file contents in the logs for verification
+          echo "Packages to download:"
+          cat requirements.txt
+
+      - name: Download Target Packages
+        run: |
+          python -m pip install --upgrade pip
+          # Use -r requirements.txt to download the entire list
+          pip download -r requirements.txt -d payload/offline_packages --platform ${{ inputs.os_type }} --only-binary=:all:
+
+      - name: Upload Dynamic Offline Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          # Renamed artifact to be generic since it contains multiple packages
+          name: offline-bundle-${{ inputs.os_type }}-${{ github.run_id }}
+          path: payload/
+          retention-days: 1
